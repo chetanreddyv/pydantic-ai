@@ -159,8 +159,6 @@ class AnthropicModelSettings(ModelSettings, total=False):
     Contains `user_id`, an external identifier for the user who is associated with the request.
     """
 
-
-
     anthropic_thinking: BetaThinkingConfigParam
     """Determine whether the model should generate a thinking block.
 
@@ -385,19 +383,12 @@ class AnthropicModel(Model):
             if isinstance(tool, CodeExecutionTool) and tool.skills:
                 # Build skill objects as dicts
                 # Skills should be in format: {"type": "anthropic", "skill_id": "...", "version": "latest"}
-                skills = [
-                    {
-                        'type': 'anthropic',
-                        'skill_id': skill_id,
-                        'version': 'latest'
-                    }
-                    for skill_id in tool.skills
-                ]
+                skills = [{'type': 'anthropic', 'skill_id': skill_id, 'version': 'latest'} for skill_id in tool.skills]
                 break
 
         # Construct container parameter
         container: dict[str, Any] | None = None
-        
+
         # If we have skills and no container yet, pass skills
         if skills:
             container = {'skills': skills}
@@ -430,14 +421,9 @@ class AnthropicModel(Model):
                 extra_headers=extra_headers,
                 extra_body=model_settings.get('extra_body'),
                 container=container or OMIT,
-
             )
-            
+
             # If streaming, return immediately
-            if stream:
-                return response
-            
-            return response
 
         except APIStatusError as e:
             if (status_code := e.status_code) >= 400:
@@ -506,7 +492,6 @@ class AnthropicModel(Model):
                 timeout=model_settings.get('timeout', NOT_GIVEN),
                 extra_headers=extra_headers,
                 extra_body=model_settings.get('extra_body'),
-                container=container or OMIT,
             )
         except APIStatusError as e:
             if (status_code := e.status_code) >= 400:
@@ -514,8 +499,6 @@ class AnthropicModel(Model):
             raise ModelAPIError(model_name=self.model_name, message=e.message) from e  # pragma: lax no cover
         except APIConnectionError as e:
             raise ModelAPIError(model_name=self.model_name, message=e.message) from e
-
-
 
     def _process_response(self, response: BetaMessage) -> ModelResponse:
         """Process a non-streamed response, and prepare a message to return."""
@@ -572,7 +555,7 @@ class AnthropicModel(Model):
         if raw_finish_reason := response.stop_reason:  # pragma: no branch
             provider_details = {'finish_reason': raw_finish_reason}
             finish_reason = _FINISH_REASON_MAP.get(raw_finish_reason)
-        
+
         return ModelResponse(
             parts=items,
             usage=_map_usage(response, self._provider.name, self._provider.base_url, self._model_name),
@@ -1228,7 +1211,6 @@ class AnthropicStreamedResponse(StreamedResponse):
                     yield self._parts_manager.handle_part(
                         vendor_part_id=event.index,
                         part=_map_web_fetch_tool_result_block(current_block, self.provider_name),
-
                     )
                 elif isinstance(current_block, BetaMCPToolUseBlock):
                     call_part = _map_mcp_server_use_block(current_block, self.provider_name)
@@ -1413,21 +1395,5 @@ def _map_mcp_server_result_block(
         provider_name=provider_name,
         tool_name=call_part.tool_name if call_part else MCPServerTool.kind,
         content=item.model_dump(mode='json', include={'content', 'is_error'}),
-        tool_call_id=item.tool_use_id,
-    )
-
-
-def _map_bash_code_execution_tool_result_block(
-    item: BetaBashCodeExecutionToolResultBlock, provider_name: str
-) -> BuiltinToolReturnPart:
-    # We use the same content type adapter as code execution for now, assuming structure is similar
-    # or we might need a new one if `BetaBashCodeExecutionToolResultBlock` has different content structure.
-    # Assuming it's compatible or we can dump it as json.
-    # If `BetaBashCodeExecutionToolResultBlock` content is different, we should use its own type.
-    # But since we don't have a specific type adapter for it yet, we'll rely on model_dump.
-    return BuiltinToolReturnPart(
-        provider_name=provider_name,
-        tool_name=CodeExecutionTool.kind,
-        content=item.model_dump(mode='json', include={'content'}),
         tool_call_id=item.tool_use_id,
     )
