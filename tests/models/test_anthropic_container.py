@@ -1,24 +1,21 @@
 from __future__ import annotations as _annotations
 
 from typing import Any
-from dataclasses import dataclass
-from datetime import timezone
 
 import pytest
-from inline_snapshot import snapshot
 
 from pydantic_ai import Agent, ModelResponse
 from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.providers.anthropic import AnthropicProvider
 
 from ..conftest import try_import
-from .test_anthropic import MockAnthropic, completion_message, get_mock_chat_completion_kwargs
+from .test_anthropic import MockAnthropic, get_mock_chat_completion_kwargs
 
 with try_import() as imports_successful:
     from anthropic.types.beta import (
+        BetaMessage,
         BetaTextBlock,
         BetaUsage,
-        BetaMessage,
     )
 
 pytestmark = [

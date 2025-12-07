@@ -68,6 +68,7 @@ try:
         BetaCacheControlEphemeralParam,
         BetaCitationsConfigParam,
         BetaCitationsDelta,
+        BetaCodeExecutionTool20250522Param,
         BetaCodeExecutionToolResultBlock,
         BetaCodeExecutionToolResultBlockContent,
         BetaCodeExecutionToolResultBlockParam,
@@ -80,6 +81,7 @@ try:
         BetaMCPToolResultBlock,
         BetaMCPToolUseBlock,
         BetaMCPToolUseBlockParam,
+        BetaMemoryTool20250818Param,
         BetaMessage,
         BetaMessageParam,
         BetaMessageTokensCount,
@@ -383,11 +385,11 @@ class AnthropicModel(Model):
 
         # Construct container parameter
         container: dict[str, Any] | None = None
-        
+
         # Check for container ID in model_settings (passed from previous turn)
         if anthropic_container := model_settings.get('anthropic_container'):
             container = anthropic_container
-        
+
         tool_choice = self._infer_tool_choice(tools, model_settings, model_request_parameters)
 
         system_prompt, anthropic_messages = await self._map_message(messages, model_request_parameters, model_settings)
@@ -417,12 +419,6 @@ class AnthropicModel(Model):
                 extra_body=model_settings.get('extra_body'),
                 container=container or OMIT,
             )
-            
-            # If streaming, return immediately
-            if stream:
-                return response
-            
-            return response
 
         except APIStatusError as e:
             if (status_code := e.status_code) >= 400:
@@ -499,8 +495,6 @@ class AnthropicModel(Model):
         except APIConnectionError as e:
             raise ModelAPIError(model_name=self.model_name, message=e.message) from e
 
-
-
     def _process_response(self, response: BetaMessage) -> ModelResponse:
         """Process a non-streamed response, and prepare a message to return."""
         items: list[ModelResponsePart] = []
@@ -556,7 +550,7 @@ class AnthropicModel(Model):
         if raw_finish_reason := response.stop_reason:  # pragma: no branch
             provider_details = {'finish_reason': raw_finish_reason}
             finish_reason = _FINISH_REASON_MAP.get(raw_finish_reason)
-        
+
         # Store container ID if present
         # The user says "Store response.container.id (likely on ModelResponse.provider_metadata)"
         # We'll check if `response` has `container` attribute or similar.
@@ -565,11 +559,11 @@ class AnthropicModel(Model):
         # Let's assume `response` is a Pydantic model from `anthropic` SDK.
         # We'll try to access it safely.
         if hasattr(response, 'container') and response.container:
-             if provider_details is None:
-                 provider_details = {}
-             # Assuming response.container is an object with an id
-             if hasattr(response.container, 'id'):
-                 provider_details['anthropic_container_id'] = response.container.id
+            if provider_details is None:
+                provider_details = {}
+            # Assuming response.container is an object with an id
+            if hasattr(response.container, 'id'):
+                provider_details['anthropic_container_id'] = response.container.id
 
         return ModelResponse(
             parts=items,
@@ -1407,21 +1401,5 @@ def _map_mcp_server_result_block(
         provider_name=provider_name,
         tool_name=call_part.tool_name if call_part else MCPServerTool.kind,
         content=item.model_dump(mode='json', include={'content', 'is_error'}),
-        tool_call_id=item.tool_use_id,
-    )
-
-
-def _map_bash_code_execution_tool_result_block(
-    item: BetaBashCodeExecutionToolResultBlock, provider_name: str
-) -> BuiltinToolReturnPart:
-    # We use the same content type adapter as code execution for now, assuming structure is similar
-    # or we might need a new one if `BetaBashCodeExecutionToolResultBlock` has different content structure.
-    # Assuming it's compatible or we can dump it as json.
-    # If `BetaBashCodeExecutionToolResultBlock` content is different, we should use its own type.
-    # But since we don't have a specific type adapter for it yet, we'll rely on model_dump.
-    return BuiltinToolReturnPart(
-        provider_name=provider_name,
-        tool_name=CodeExecutionTool.kind,
-        content=item.model_dump(mode='json', include={'content'}),
         tool_call_id=item.tool_use_id,
     )
